@@ -1,6 +1,6 @@
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, products, sales, saleItems, type InsertProduct } from "../drizzle/schema";
+import { InsertUser, users, products, batches, sales, saleItems, type InsertProduct } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -61,7 +61,12 @@ export async function createSale(input: { invoiceNumber: string; customerName: s
   return db.transaction(async (tx) => {
     const saleResult = await tx.insert(sales).values({ invoiceNumber: input.invoiceNumber, customerName: input.customerName, totalCents: input.totalCents, paymentMethod: input.paymentMethod, status: input.paymentMethod === "credit" ? "credit" : "paid" });
     const saleId = Number(saleResult[0].insertId);
-    if (input.items.length > 0) await tx.insert(saleItems).values(input.items.map((item) => ({ saleId, productId: item.productId, batchId: item.batchId, quantity: item.quantity, unitPriceCents: item.unitPriceCents, totalCents: item.quantity * item.unitPriceCents })));
+    if (input.items.length > 0) {
+      await tx.insert(saleItems).values(input.items.map((item) => ({ saleId, productId: item.productId, batchId: item.batchId, quantity: item.quantity, unitPriceCents: item.unitPriceCents, totalCents: item.quantity * item.unitPriceCents })));
+      for (const item of input.items) {
+        if (item.batchId) await tx.update(batches).set({ quantity: sql`${batches.quantity} - ${item.quantity}` }).where(eq(batches.id, item.batchId));
+      }
+    }
     return { id: saleId, invoiceNumber: input.invoiceNumber };
   });
 }
