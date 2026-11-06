@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { getSessionCookieName, getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, router } from "./_core/trpc";
+import { publicProcedure, roleProcedure, router } from "./_core/trpc";
 import { ENV } from "./_core/env";
 import { createProduct, createSale, listProducts, listSales } from "./db";
 import { TRPCError } from "@trpc/server";
@@ -17,15 +17,15 @@ export const appRouter = router({
     logout: publicProcedure.mutation(({ ctx }) => { const cookieOptions = getSessionCookieOptions(ctx.req); ctx.res.clearCookie(getSessionCookieName(ctx.req), { ...cookieOptions, maxAge: -1 }); return { success: true } as const; }),
   }),
   catalog: router({
-    products: publicProcedure.query(() => listProducts()),
-    createProduct: publicProcedure.input(z.object({ name: z.string().min(2), category: z.string().min(2), barcode: z.string().max(64).optional(), salePriceCents: z.number().int().nonnegative(), purchasePriceCents: z.number().int().nonnegative(), minimumStock: z.number().int().nonnegative(), requiresPrescription: z.boolean().default(false) })).mutation(({ input }) => createProduct({ ...input, requiresPrescription: input.requiresPrescription ? 1 : 0 })),
+    products: roleProcedure(["admin", "manager", "cashier", "stock", "accountant", "viewer"]).query(() => listProducts()),
+    createProduct: roleProcedure(["admin", "manager", "stock"]).input(z.object({ name: z.string().min(2), category: z.string().min(2), barcode: z.string().max(64).optional(), salePriceCents: z.number().int().nonnegative(), purchasePriceCents: z.number().int().nonnegative(), minimumStock: z.number().int().nonnegative(), requiresPrescription: z.boolean().default(false) })).mutation(({ input }) => createProduct({ ...input, requiresPrescription: input.requiresPrescription ? 1 : 0 })),
   }),
   sales: router({
-    list: publicProcedure.query(() => listSales()),
-    create: publicProcedure.input(saleInput).mutation(({ input }) => createSale(input)),
+    list: roleProcedure(["admin", "manager", "cashier", "accountant", "viewer"]).query(() => listSales()),
+    create: roleProcedure(["admin", "manager", "cashier"]).input(saleInput).mutation(({ input }) => createSale(input)),
   }),
   sync: router({
-    push: publicProcedure.input(z.object({ operations: z.array(syncOperation).max(50) })).mutation(async ({ input }) => {
+    push: roleProcedure(["admin", "manager", "cashier", "stock"]).input(z.object({ operations: z.array(syncOperation).max(50) })).mutation(async ({ input }) => {
       const syncedIds: number[] = [];
       for (const operation of input.operations) {
         if (operation.operationType === "product.create") {
@@ -42,7 +42,7 @@ export const appRouter = router({
     }),
   }),
   assistant: router({
-    chat: publicProcedure.input(z.object({ messages: z.array(chatMessage).min(1).max(12) })).mutation(async ({ input }) => {
+    chat: roleProcedure(["admin", "manager", "cashier", "stock", "accountant", "viewer"]).input(z.object({ messages: z.array(chatMessage).min(1).max(12) })).mutation(async ({ input }) => {
       if (!ENV.geminiApiKey) throw new TRPCError({ code: "PRECONDITION_FAILED", message: "مفتاح Gemini غير مهيأ على الخادم." });
       const model = "gemini-3.1-flash-lite";
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(ENV.geminiApiKey)}`;
