@@ -1,48 +1,142 @@
-import { ScrollView, Text, View, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
+import { formatMoney, sales } from "@/constants/pharmacy";
 
-/**
- * Home Screen - NativeWind Example
- *
- * This template uses NativeWind (Tailwind CSS for React Native).
- * You can use familiar Tailwind classes directly in className props.
- *
- * Key patterns:
- * - Use `className` instead of `style` for most styling
- * - Theme colors: use tokens directly (bg-background, text-foreground, bg-primary, etc.); no dark: prefix needed
- * - Responsive: standard Tailwind breakpoints work on web
- * - Custom colors defined in tailwind.config.js
- */
+const metrics = [
+  { label: "مبيعات اليوم", value: formatMoney(2485), delta: "+12.8%", icon: "trending-up", color: "#0F8A70" },
+  { label: "صافي الربح", value: formatMoney(642), delta: "+8.4%", icon: "analytics-outline", color: "#2563EB" },
+  { label: "قيمة المخزون", value: formatMoney(48760), delta: "1,284 صنف", icon: "cube-outline", color: "#7C3AED" },
+  { label: "الذمم المستحقة", value: formatMoney(8420), delta: "6 عملاء", icon: "wallet-outline", color: "#D97706" },
+] as const;
+
+const alerts = [
+  { title: "أصناف قريبة من الانتهاء", detail: "3 أصناف خلال 90 يومًا", tone: "warning", icon: "time-outline" },
+  { title: "مخزون منخفض", detail: "2 صنف تحت الحد الأدنى", tone: "danger", icon: "alert-circle-outline" },
+];
+
 export default function HomeScreen() {
   return (
-    <ScreenContainer className="p-6">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-        <View className="flex-1 gap-8">
-          {/* Hero Section */}
-          <View className="items-center gap-2">
-            <Text className="text-4xl font-bold text-foreground">Welcome</Text>
-            <Text className="text-base text-muted text-center">
-              Edit app/(tabs)/index.tsx to get started
-            </Text>
+    <ScreenContainer>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.eyebrow}>الفرع الرئيسي · اليوم 12 يونيو</Text>
+            <Text style={styles.title}>صباح الخير، مدير الصيدلية</Text>
+            <Text style={styles.subtitle}>هذه صورة سريعة عن أداء العمل اليوم.</Text>
           </View>
+          <View style={styles.avatar}><Text style={styles.avatarText}>ن</Text></View>
+        </View>
 
-          {/* Example Card */}
-          <View className="w-full max-w-sm self-center bg-surface rounded-2xl p-6 shadow-sm border border-border">
-            <Text className="text-lg font-semibold text-foreground mb-2">NativeWind Ready</Text>
-            <Text className="text-sm text-muted leading-relaxed">
-              Use Tailwind CSS classes directly in your React Native components.
-            </Text>
-          </View>
+        <View style={styles.statusBar}>
+          <View style={styles.statusDot} />
+          <Text style={styles.statusText}>النظام يعمل بشكل طبيعي</Text>
+          <Text style={styles.demoText}>بيانات تجريبية</Text>
+        </View>
 
-          {/* Example Button */}
-          <View className="items-center">
-            <TouchableOpacity className="bg-primary px-6 py-3 rounded-full active:opacity-80">
-              <Text className="text-background font-semibold">Get Started</Text>
-            </TouchableOpacity>
+        <View style={styles.metricsGrid}>
+          {metrics.map((metric) => (
+            <View key={metric.label} style={styles.metricCard}>
+              <View style={[styles.metricIcon, { backgroundColor: `${metric.color}18` }]}>
+                <Ionicons name={metric.icon as never} size={19} color={metric.color} />
+              </View>
+              <Text style={styles.metricLabel}>{metric.label}</Text>
+              <Text style={styles.metricValue}>{metric.value}</Text>
+              <Text style={[styles.metricDelta, { color: metric.color }]}>{metric.delta}</Text>
+            </View>
+          ))}
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>إجراءات سريعة</Text>
+          <Text style={styles.sectionHint}>اختصارات يومية</Text>
+        </View>
+        <View style={styles.quickRow}>
+          {[{ label: "بيع جديد", icon: "cart-outline", color: "#0F8A70" }, { label: "إضافة صنف", icon: "add-circle-outline", color: "#2563EB" }, { label: "شراء", icon: "bag-add-outline", color: "#7C3AED" }, { label: "مصروف", icon: "receipt-outline", color: "#D97706" }].map((item) => (
+            <Pressable key={item.label} style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}>
+              <Ionicons name={item.icon as never} size={22} color={item.color} />
+              <Text style={styles.quickLabel}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>تنبيهات تحتاج انتباهك</Text>
+          <Text style={styles.linkText}>عرض الكل</Text>
+        </View>
+        {alerts.map((alert) => (
+          <View key={alert.title} style={styles.alertCard}>
+            <View style={[styles.alertIcon, alert.tone === "warning" ? styles.warningBg : styles.dangerBg]}>
+              <Ionicons name={alert.icon as never} size={21} color={alert.tone === "warning" ? "#B45309" : "#DC2626"} />
+            </View>
+            <View style={styles.alertCopy}><Text style={styles.alertTitle}>{alert.title}</Text><Text style={styles.alertDetail}>{alert.detail}</Text></View>
+            <Ionicons name="chevron-back" size={18} color="#94A3B8" />
           </View>
+        ))}
+
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>آخر الفواتير</Text>
+          <Text style={styles.linkText}>كل المبيعات</Text>
+        </View>
+        <View style={styles.salesCard}>
+          {sales.slice(0, 3).map((sale, index) => (
+            <View key={sale.id} style={[styles.saleRow, index > 0 && styles.rowBorder]}>
+              <View style={styles.saleIcon}><Ionicons name="receipt-outline" size={18} color="#0F8A70" /></View>
+              <View style={styles.saleCopy}><Text style={styles.saleId}>{sale.id} · {sale.customer}</Text><Text style={styles.saleTime}>{sale.items} أصناف · {sale.time}</Text></View>
+              <View style={styles.saleAmount}><Text style={styles.amountText}>{formatMoney(sale.total)}</Text><Text style={[styles.saleStatus, sale.status === "مدفوعة" ? styles.paid : sale.status === "آجلة" ? styles.credit : styles.refunded]}>{sale.status}</Text></View>
+            </View>
+          ))}
         </View>
       </ScrollView>
     </ScreenContainer>
   );
 }
+
+const styles = StyleSheet.create({
+  content: { padding: 20, paddingBottom: 36, gap: 14, backgroundColor: "#F7FAF9" },
+  header: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginBottom: 4 },
+  eyebrow: { textAlign: "right", color: "#0F8A70", fontSize: 12, fontWeight: "700", marginBottom: 6 },
+  title: { textAlign: "right", color: "#0F172A", fontSize: 23, fontWeight: "800" },
+  subtitle: { textAlign: "right", color: "#64748B", fontSize: 13, marginTop: 5 },
+  avatar: { width: 46, height: 46, borderRadius: 16, alignItems: "center", justifyContent: "center", backgroundColor: "#0F8A70" },
+  avatarText: { color: "#FFFFFF", fontSize: 20, fontWeight: "800" },
+  statusBar: { flexDirection: "row-reverse", alignItems: "center", gap: 7, backgroundColor: "#E9F8F2", paddingHorizontal: 13, paddingVertical: 9, borderRadius: 12 },
+  statusDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#16A34A" },
+  statusText: { flex: 1, textAlign: "right", color: "#166534", fontSize: 12, fontWeight: "700" },
+  demoText: { color: "#64748B", fontSize: 11 },
+  metricsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  metricCard: { width: "48.5%", minHeight: 132, backgroundColor: "#FFFFFF", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: "#E5EEEB" },
+  metricIcon: { width: 34, height: 34, borderRadius: 11, alignItems: "center", justifyContent: "center", alignSelf: "flex-end", marginBottom: 8 },
+  metricLabel: { textAlign: "right", color: "#64748B", fontSize: 12, marginBottom: 5 },
+  metricValue: { textAlign: "right", color: "#0F172A", fontSize: 17, fontWeight: "800" },
+  metricDelta: { textAlign: "right", fontSize: 11, fontWeight: "700", marginTop: 5 },
+  sectionHeader: { flexDirection: "row-reverse", justifyContent: "space-between", alignItems: "center", marginTop: 7 },
+  sectionTitle: { color: "#0F172A", fontSize: 16, fontWeight: "800" },
+  sectionHint: { color: "#94A3B8", fontSize: 12 },
+  linkText: { color: "#0F8A70", fontSize: 12, fontWeight: "700" },
+  quickRow: { flexDirection: "row-reverse", gap: 8 },
+  quickAction: { flex: 1, minHeight: 77, backgroundColor: "#FFFFFF", borderRadius: 16, alignItems: "center", justifyContent: "center", gap: 7, borderWidth: 1, borderColor: "#E5EEEB" },
+  quickLabel: { color: "#334155", fontSize: 11, fontWeight: "700" },
+  pressed: { opacity: 0.68, transform: [{ scale: 0.97 }] },
+  alertCard: { minHeight: 66, borderRadius: 16, backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "#E5EEEB", flexDirection: "row-reverse", alignItems: "center", padding: 12, gap: 11 },
+  alertIcon: { width: 39, height: 39, borderRadius: 13, alignItems: "center", justifyContent: "center" },
+  warningBg: { backgroundColor: "#FEF3C7" },
+  dangerBg: { backgroundColor: "#FEE2E2" },
+  alertCopy: { flex: 1 },
+  alertTitle: { textAlign: "right", color: "#1E293B", fontSize: 13, fontWeight: "800" },
+  alertDetail: { textAlign: "right", color: "#64748B", fontSize: 12, marginTop: 4 },
+  salesCard: { backgroundColor: "#FFFFFF", borderRadius: 18, borderWidth: 1, borderColor: "#E5EEEB", paddingHorizontal: 13 },
+  saleRow: { flexDirection: "row-reverse", alignItems: "center", gap: 10, paddingVertical: 13 },
+  rowBorder: { borderTopWidth: 1, borderTopColor: "#EDF2F0" },
+  saleIcon: { width: 36, height: 36, borderRadius: 12, backgroundColor: "#E9F8F2", alignItems: "center", justifyContent: "center" },
+  saleCopy: { flex: 1 },
+  saleId: { textAlign: "right", color: "#1E293B", fontSize: 12, fontWeight: "800" },
+  saleTime: { textAlign: "right", color: "#94A3B8", fontSize: 11, marginTop: 4 },
+  saleAmount: { alignItems: "flex-end" },
+  amountText: { color: "#0F172A", fontSize: 12, fontWeight: "800" },
+  saleStatus: { fontSize: 10, fontWeight: "700", marginTop: 4 },
+  paid: { color: "#16A34A" },
+  credit: { color: "#D97706" },
+  refunded: { color: "#DC2626" },
+});
