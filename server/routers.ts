@@ -3,12 +3,15 @@ import { getSessionCookieName, getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, roleProcedure, router } from "./_core/trpc";
 import { ENV } from "./_core/env";
-import { claimSyncOperation, createProduct, createSale, getDashboardSummary, listProducts, listSales, releaseSyncOperation } from "./db";
+import { claimSyncOperation, createExpense, createProduct, createPurchase, createSalesReturn, createSale, createSupplier, getDashboardSummary, listExpenses, listProducts, listSales, listSuppliers, listUsers, releaseSyncOperation, updateUserRole } from "./db";
 import { TRPCError } from "@trpc/server";
 
 const chatMessage = z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(4000) });
 const saleInput = z.object({ invoiceNumber: z.string().min(1).max(64), customerName: z.string().min(1).max(160), totalCents: z.number().int().nonnegative(), paymentMethod: z.enum(["cash", "card", "credit"]), items: z.array(z.object({ productId: z.number().int().positive(), batchId: z.number().int().positive().optional(), quantity: z.number().int().positive(), unitPriceCents: z.number().int().nonnegative() })).min(1) });
 const syncOperation = z.object({ id: z.number().int().positive(), operationId: z.string().trim().min(1).max(128).optional(), operationType: z.enum(["product.create", "sale.create"]), payload: z.unknown() });
+const purchaseInput = z.object({ invoiceNumber: z.string().min(1).max(64), supplierId: z.number().int().positive(), paidCents: z.number().int().nonnegative(), items: z.array(z.object({ productId: z.number().int().positive(), batchNumber: z.string().min(1).max(80), expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), quantity: z.number().int().positive(), unitCostCents: z.number().int().nonnegative() })).min(1) });
+const expenseInput = z.object({ category: z.string().min(2).max(120), amountCents: z.number().int().positive(), description: z.string().max(500).optional() });
+const returnInput = z.object({ returnNumber: z.string().min(1).max(64), saleId: z.number().int().positive(), reason: z.string().min(2).max(255), restock: z.boolean(), items: z.array(z.object({ saleItemId: z.number().int().positive(), quantity: z.number().int().positive() })).min(1) });
 
 export const appRouter = router({
   system: systemRouter,
@@ -26,6 +29,22 @@ export const appRouter = router({
   }),
   dashboard: router({
     summary: roleProcedure(["admin", "manager", "cashier", "accountant", "viewer"]).query(() => getDashboardSummary()),
+  }),
+  purchasing: router({
+    suppliers: roleProcedure(["admin", "manager", "stock", "accountant"]).query(() => listSuppliers()),
+    createSupplier: roleProcedure(["admin", "manager", "stock", "accountant"]).input(z.object({ name: z.string().min(2).max(180), phone: z.string().max(40).optional() })).mutation(({ input, ctx }) => createSupplier(input, ctx.user.id)),
+    create: roleProcedure(["admin", "manager", "stock", "accountant"]).input(purchaseInput).mutation(({ input, ctx }) => createPurchase(input, ctx.user.id)),
+  }),
+  expenses: router({
+    list: roleProcedure(["admin", "manager", "accountant", "viewer"]).query(() => listExpenses()),
+    create: roleProcedure(["admin", "manager", "accountant"]).input(expenseInput).mutation(({ input, ctx }) => createExpense({ ...input, createdBy: ctx.user.id })),
+  }),
+  returns: router({
+    create: roleProcedure(["admin", "manager", "accountant"]).input(returnInput).mutation(({ input, ctx }) => createSalesReturn(input, ctx.user.id)),
+  }),
+  users: router({
+    list: roleProcedure(["admin", "manager"]).query(() => listUsers()),
+    updateRole: roleProcedure(["admin"]).input(z.object({ userId: z.number().int().positive(), role: z.enum(["admin", "manager", "cashier", "stock", "accountant", "viewer", "user"]) })).mutation(({ input, ctx }) => updateUserRole(input.userId, input.role, ctx.user.id)),
   }),
   sync: router({
     push: roleProcedure(["admin", "manager", "cashier", "stock"]).input(z.object({ operations: z.array(syncOperation).max(50) })).mutation(async ({ input }) => {
