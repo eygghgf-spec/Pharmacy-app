@@ -1,15 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 
 import { ScreenContainer } from "@/components/screen-container";
-import { formatMoney, sales } from "@/constants/pharmacy";
-
-const metrics = [
-  { label: "مبيعات اليوم", value: formatMoney(2485), delta: "+12.8%", icon: "trending-up", color: "#0F8A70" },
-  { label: "صافي الربح", value: formatMoney(642), delta: "+8.4%", icon: "analytics-outline", color: "#2563EB" },
-  { label: "قيمة المخزون", value: formatMoney(48760), delta: "1,284 صنف", icon: "cube-outline", color: "#7C3AED" },
-  { label: "الذمم المستحقة", value: formatMoney(8420), delta: "6 عملاء", icon: "wallet-outline", color: "#D97706" },
-] as const;
+import { formatMoney } from "@/constants/pharmacy";
+import { trpc } from "@/lib/trpc";
 
 const alerts = [
   { title: "أصناف قريبة من الانتهاء", detail: "3 أصناف خلال 90 يومًا", tone: "warning", icon: "time-outline" },
@@ -17,6 +12,16 @@ const alerts = [
 ];
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const summaryQuery = trpc.dashboard.summary.useQuery();
+  const salesQuery = trpc.sales.list.useQuery();
+  const summary = summaryQuery.data ?? { salesTodayCents: 0, invoiceCount: 0, averageSaleCents: 0, productCount: 0 };
+  const metrics = [
+    { label: "مبيعات اليوم", value: formatMoney(summary.salesTodayCents / 100), delta: `${summary.invoiceCount} فاتورة`, icon: "trending-up", color: "#0F8A70" },
+    { label: "متوسط الفاتورة", value: formatMoney(summary.averageSaleCents / 100), delta: "بيانات فعلية", icon: "analytics-outline", color: "#2563EB" },
+    { label: "الأصناف النشطة", value: String(summary.productCount), delta: "من قاعدة البيانات", icon: "cube-outline", color: "#7C3AED" },
+    { label: "الذمم المستحقة", value: "—", delta: "غير مفعلة", icon: "wallet-outline", color: "#D97706" },
+  ] as const;
   return (
     <ScreenContainer>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -32,7 +37,7 @@ export default function HomeScreen() {
         <View style={styles.statusBar}>
           <View style={styles.statusDot} />
           <Text style={styles.statusText}>النظام يعمل بشكل طبيعي</Text>
-          <Text style={styles.demoText}>بيانات تجريبية</Text>
+          <Text style={styles.demoText}>{summaryQuery.isLoading ? "جارٍ التحميل" : "بيانات فعلية"}</Text>
         </View>
 
         <View style={styles.metricsGrid}>
@@ -53,8 +58,8 @@ export default function HomeScreen() {
           <Text style={styles.sectionHint}>اختصارات يومية</Text>
         </View>
         <View style={styles.quickRow}>
-          {[{ label: "بيع جديد", icon: "cart-outline", color: "#0F8A70" }, { label: "إضافة صنف", icon: "add-circle-outline", color: "#2563EB" }, { label: "شراء", icon: "bag-add-outline", color: "#7C3AED" }, { label: "مصروف", icon: "receipt-outline", color: "#D97706" }].map((item) => (
-            <Pressable key={item.label} style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}>
+          {[{ label: "بيع جديد", icon: "cart-outline", color: "#0F8A70", route: "/(tabs)/sales" }, { label: "إضافة صنف", icon: "add-circle-outline", color: "#2563EB", route: "/(tabs)/inventory" }, { label: "شراء", icon: "bag-add-outline", color: "#7C3AED", route: "/(tabs)/inventory" }, { label: "مصروف", icon: "receipt-outline", color: "#D97706", route: "/(tabs)/reports" }].map((item) => (
+            <Pressable key={item.label} onPress={() => router.push(item.route as never)} style={({ pressed }) => [styles.quickAction, pressed && styles.pressed]}>
               <Ionicons name={item.icon as never} size={22} color={item.color} />
               <Text style={styles.quickLabel}>{item.label}</Text>
             </Pressable>
@@ -80,11 +85,11 @@ export default function HomeScreen() {
           <Text style={styles.linkText}>كل المبيعات</Text>
         </View>
         <View style={styles.salesCard}>
-          {sales.slice(0, 3).map((sale, index) => (
+          {(salesQuery.data ?? []).slice(0, 3).map((sale, index) => (
             <View key={sale.id} style={[styles.saleRow, index > 0 && styles.rowBorder]}>
               <View style={styles.saleIcon}><Ionicons name="receipt-outline" size={18} color="#0F8A70" /></View>
-              <View style={styles.saleCopy}><Text style={styles.saleId}>{sale.id} · {sale.customer}</Text><Text style={styles.saleTime}>{sale.items} أصناف · {sale.time}</Text></View>
-              <View style={styles.saleAmount}><Text style={styles.amountText}>{formatMoney(sale.total)}</Text><Text style={[styles.saleStatus, sale.status === "مدفوعة" ? styles.paid : sale.status === "آجلة" ? styles.credit : styles.refunded]}>{sale.status}</Text></View>
+              <View style={styles.saleCopy}><Text style={styles.saleId}>{sale.invoiceNumber} · {sale.customerName}</Text><Text style={styles.saleTime}>{new Date(sale.createdAt).toLocaleTimeString("ar", { hour: "2-digit", minute: "2-digit" })}</Text></View>
+              <View style={styles.saleAmount}><Text style={styles.amountText}>{formatMoney(sale.totalCents / 100)}</Text><Text style={[styles.saleStatus, sale.status === "paid" ? styles.paid : sale.status === "credit" ? styles.credit : styles.refunded]}>{sale.status === "paid" ? "مدفوعة" : sale.status === "credit" ? "آجلة" : "مسترجعة"}</Text></View>
             </View>
           ))}
         </View>

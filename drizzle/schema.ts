@@ -65,6 +65,12 @@ export const expenses = mysqlTable("expenses", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const syncOperations = mysqlTable("syncOperations", {
+  operationId: varchar("operationId", { length: 128 }).primaryKey(),
+  operationType: varchar("operationType", { length: 64 }).notNull(),
+  processedAt: timestamp("processedAt").defaultNow().notNull(),
+});
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 export type Product = typeof products.$inferSelect;
@@ -73,3 +79,4 @@ export type Batch = typeof batches.$inferSelect;
 export type Sale = typeof sales.$inferSelect;
 export type SaleItem = typeof saleItems.$inferSelect;
 export type Expense = typeof expenses.$inferSelect;
+export type SyncOperation = typeof syncOperations.$inferSelect;

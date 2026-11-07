@@ -3,12 +3,12 @@ import { getSessionCookieName, getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, roleProcedure, router } from "./_core/trpc";
 import { ENV } from "./_core/env";
-import { createProduct, createSale, listProducts, listSales } from "./db";
+import { claimSyncOperation, createProduct, createSale, getDashboardSummary, listProducts, listSales, releaseSyncOperation } from "./db";
 import { TRPCError } from "@trpc/server";
 
 const chatMessage = z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(4000) });
 const saleInput = z.object({ invoiceNumber: z.string().min(1).max(64), customerName: z.string().min(1).max(160), totalCents: z.number().int().nonnegative(), paymentMethod: z.enum(["cash", "card", "credit"]), items: z.array(z.object({ productId: z.number().int().positive(), batchId: z.number().int().positive().optional(), quantity: z.number().int().positive(), unitPriceCents: z.number().int().nonnegative() })).min(1) });
-const syncOperation = z.object({ id: z.number().int().positive(), operationType: z.enum(["product.create", "sale.create"]), payload: z.unknown() });
+const syncOperation = z.object({ id: z.number().int().positive(), operationId: z.string().trim().min(1).max(128).optional(), operationType: z.enum(["product.create", "sale.create"]), payload: z.unknown() });
 
 export const appRouter = router({
   system: systemRouter,
@@ -18,24 +18,33 @@ export const appRouter = router({
   }),
   catalog: router({
     products: roleProcedure(["admin", "manager", "cashier", "stock", "accountant", "viewer"]).query(() => listProducts()),
-    createProduct: roleProcedure(["admin", "manager", "stock"]).input(z.object({ name: z.string().min(2), category: z.string().min(2), barcode: z.string().max(64).optional(), salePriceCents: z.number().int().nonnegative(), purchasePriceCents: z.number().int().nonnegative(), minimumStock: z.number().int().nonnegative(), requiresPrescription: z.boolean().default(false) })).mutation(({ input }) => createProduct({ ...input, requiresPrescription: input.requiresPrescription ? 1 : 0 })),
+    createProduct: roleProcedure(["admin", "manager", "stock"]).input(z.object({ name: z.string().min(2), category: z.string().min(2), barcode: z.string().max(64).optional(), salePriceCents: z.number().int().nonnegative(), purchasePriceCents: z.number().int().nonnegative(), minimumStock: z.number().int().nonnegative(), requiresPrescription: z.boolean().default(false), openingBatch: z.object({ batchNumber: z.string().min(1), expiryDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), quantity: z.number().int().nonnegative(), purchasePriceCents: z.number().int().nonnegative() }).optional() })).mutation(({ input }) => { const { openingBatch, ...product } = input; return createProduct({ ...product, requiresPrescription: product.requiresPrescription ? 1 : 0 }, openingBatch); }),
   }),
   sales: router({
     list: roleProcedure(["admin", "manager", "cashier", "accountant", "viewer"]).query(() => listSales()),
     create: roleProcedure(["admin", "manager", "cashier"]).input(saleInput).mutation(({ input }) => createSale(input)),
   }),
+  dashboard: router({
+    summary: roleProcedure(["admin", "manager", "cashier", "accountant", "viewer"]).query(() => getDashboardSummary()),
+  }),
   sync: router({
     push: roleProcedure(["admin", "manager", "cashier", "stock"]).input(z.object({ operations: z.array(syncOperation).max(50) })).mutation(async ({ input }) => {
       const syncedIds: number[] = [];
       for (const operation of input.operations) {
-        if (operation.operationType === "product.create") {
-          const payload = z.object({ name: z.string(), category: z.string(), price: z.number(), minimum: z.number() }).parse(operation.payload);
-          await createProduct({ name: payload.name, category: payload.category, salePriceCents: Math.round(payload.price * 100), purchasePriceCents: 0, minimumStock: payload.minimum, requiresPrescription: 0 });
+        const claimed = await claimSyncOperation(operation.operationId ?? String(operation.id), operation.operationType);
+        if (!claimed) { syncedIds.push(operation.id); continue; }
+        try {
+          if (operation.operationType === "product.create") {
+            const payload = z.object({ name: z.string(), category: z.string(), price: z.number(), minimum: z.number() }).parse(operation.payload);
+            await createProduct({ name: payload.name, category: payload.category, salePriceCents: Math.round(payload.price * 100), purchasePriceCents: 0, minimumStock: payload.minimum, requiresPrescription: 0 });
+          } else {
+            const payload = saleInput.parse(operation.payload);
+            await createSale(payload);
+          }
           syncedIds.push(operation.id);
-        } else {
-          const payload = saleInput.parse(operation.payload);
-          await createSale(payload);
-          syncedIds.push(operation.id);
+        } catch (error) {
+          await releaseSyncOperation(operation.operationId ?? String(operation.id));
+          throw error;
         }
       }
       return { syncedIds };

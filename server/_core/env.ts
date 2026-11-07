@@ -9,3 +9,7 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   geminiApiKey: process.env.GEMINI_API_KEY ?? "",
 };
+
+if (ENV.isProduction && !ENV.cookieSecret) {
+  throw new Error("JWT_SECRET or MANUS_JWT_SECRET is required in production");
+}

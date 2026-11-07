@@ -2,12 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
-import { formatMoney, inventory as demoInventory, type InventoryItem } from "@/constants/pharmacy";
+import { formatMoney, type InventoryItem } from "@/constants/pharmacy";
 import { initLocalDatabase, markOperationSynced, readInventory, readPendingOperations, queueOperation, saveInventory } from "@/lib/local-db";
 import { trpc } from "@/lib/trpc";
 
 export default function InventoryScreen() {
-  const [items, setItems] = useState<InventoryItem[]>(demoInventory);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [query, setQuery] = useState("");
   const [showAdd, setShowAdd] = useState(false);
   const [name, setName] = useState("");
@@ -15,7 +15,6 @@ export default function InventoryScreen() {
   const [price, setPrice] = useState("");
   const [stock, setStock] = useState("");
   const [minimum, setMinimum] = useState("");
-  const createProduct = trpc.catalog.createProduct.useMutation();
   const syncPending = trpc.sync.push.useMutation();
 
   useEffect(() => {
@@ -23,10 +22,11 @@ export default function InventoryScreen() {
     const timer = setTimeout(() => {
       const stored = readInventory();
       if (stored.length > 0) setItems(stored);
-      else saveInventory(demoInventory);
+      else saveInventory([]);
       const pending = readPendingOperations();
       if (pending.length > 0) {
-        syncPending.mutate({ operations: pending.map((operation) => ({ id: operation.id, operationType: operation.operation_type as "product.create" | "sale.create", payload: JSON.parse(operation.payload) })) }, { onSuccess: (result) => result.syncedIds.forEach(markOperationSynced) });
+        const operations = pending.flatMap((operation) => { try { return [{ id: operation.id, operationType: operation.operation_type as "product.create" | "sale.create", payload: JSON.parse(operation.payload) }]; } catch { return []; } });
+        if (operations.length) syncPending.mutate({ operations }, { onSuccess: (result) => result.syncedIds.forEach(markOperationSynced) });
       }
     }, 0);
     return () => clearTimeout(timer);
@@ -45,11 +45,6 @@ export default function InventoryScreen() {
     setItems(updated);
     saveInventory(updated);
     queueOperation("product.create", next);
-    try {
-      await createProduct.mutateAsync({ name: next.name, category: next.category, salePriceCents: Math.round(next.price * 100), purchasePriceCents: 0, minimumStock: next.minimum, requiresPrescription: false });
-    } catch {
-      // The outbox keeps the local item available until the server is reachable.
-    }
     setName(""); setCategory(""); setPrice(""); setStock(""); setMinimum(""); setShowAdd(false);
   };
 
