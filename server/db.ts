@@ -1,6 +1,6 @@
 import { eq, desc, asc, and, gte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
-import { InsertUser, users, products, batches, sales, saleItems, syncOperations, suppliers, purchaseInvoices, purchaseItems, expensesLedger, returnsLedger, returnItems, auditLogs, type InsertProduct } from "../drizzle/schema";
+import { InsertUser, users, products, batches, sales, saleItems, syncOperations, suppliers, customers, supplierPayments, customerPayments, purchaseInvoices, purchaseItems, expensesLedger, returnsLedger, returnItems, purchaseReturns, purchaseReturnItems, auditLogs, type InsertProduct } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 import { allocateFefo, computeInvoiceTotal } from "./domain";
 
@@ -71,7 +71,7 @@ export async function getDashboardSummary() {
   return { salesTodayCents, invoiceCount: todayRows.length, averageSaleCents: todayRows.length ? Math.round(salesTodayCents / todayRows.length) : 0, productCount: productRows.length };
 }
 
-export async function createSale(input: { invoiceNumber: string; customerName: string; totalCents: number; paymentMethod: "cash" | "card" | "credit"; items: Array<{ productId: number; batchId?: number; quantity: number; unitPriceCents: number }> }) {
+export async function createSale(input: { invoiceNumber: string; customerName: string; customerId?: number; totalCents: number; paymentMethod: "cash" | "card" | "credit"; items: Array<{ productId: number; batchId?: number; quantity: number; unitPriceCents: number }> }) {
   const db = await getDb();
   if (!db) throw new Error("قاعدة البيانات غير متاحة");
   return db.transaction(async (tx) => {
@@ -92,13 +92,15 @@ export async function createSale(input: { invoiceNumber: string; customerName: s
       for (const allocation of selected) allocations.push({ productId: item.productId, batchId: allocation.batchId, quantity: allocation.quantity, unitPriceCents: product.salePriceCents, totalCents: allocation.quantity * product.salePriceCents });
     }
     if (input.totalCents !== calculatedTotal) throw new Error("إجمالي الفاتورة غير صحيح");
-    const saleResult = await tx.insert(sales).values({ invoiceNumber: input.invoiceNumber, customerName: input.customerName, totalCents: calculatedTotal, paymentMethod: input.paymentMethod, status: input.paymentMethod === "credit" ? "credit" : "paid" });
+    if (input.paymentMethod === "credit") { if (!input.customerId) throw new Error("البيع الآجل يحتاج عميلًا"); const customer = (await tx.select().from(customers).where(eq(customers.id, input.customerId)).limit(1))[0]; if (!customer) throw new Error("العميل غير موجود"); }
+    const saleResult = await tx.insert(sales).values({ invoiceNumber: input.invoiceNumber, customerName: input.customerName, customerId: input.customerId, totalCents: calculatedTotal, paymentMethod: input.paymentMethod, status: input.paymentMethod === "credit" ? "credit" : "paid" });
     const saleId = Number(saleResult[0].insertId);
     await tx.insert(saleItems).values(allocations.map((item) => ({ saleId, ...item })));
     for (const item of allocations) {
       const result = await tx.update(batches).set({ quantity: sql`${batches.quantity} - ${item.quantity}` }).where(and(eq(batches.id, item.batchId), gte(batches.quantity, item.quantity)));
       if (!result[0].affectedRows) throw new Error("تغير المخزون أثناء الحفظ، أعد المحاولة");
     }
+    if (input.paymentMethod === "credit" && input.customerId) await tx.update(customers).set({ balanceCents: sql`${customers.balanceCents} + ${calculatedTotal}` }).where(eq(customers.id, input.customerId));
     return { id: saleId, invoiceNumber: input.invoiceNumber };
   });
 }

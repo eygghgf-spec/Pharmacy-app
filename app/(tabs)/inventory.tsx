@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { ScreenContainer } from "@/components/screen-container";
 import { formatMoney, type InventoryItem } from "@/constants/pharmacy";
-import { initLocalDatabase, markOperationSynced, readInventory, readPendingOperations, queueOperation, saveInventory } from "@/lib/local-db";
+import { acquireSyncLock, initLocalDatabase, markOperationFailed, markOperationSynced, readInventory, readPendingOperations, queueOperation, releaseSyncLock, saveInventory } from "@/lib/local-db";
 import { trpc } from "@/lib/trpc";
 
 export default function InventoryScreen() {
@@ -23,10 +23,10 @@ export default function InventoryScreen() {
       const stored = readInventory();
       if (stored.length > 0) setItems(stored);
       else saveInventory([]);
-      const pending = readPendingOperations();
-      if (pending.length > 0) {
-        const operations = pending.flatMap((operation) => { try { return [{ id: operation.id, operationType: operation.operation_type as "product.create" | "sale.create", payload: JSON.parse(operation.payload) }]; } catch { return []; } });
-        if (operations.length) syncPending.mutate({ operations }, { onSuccess: (result) => result.syncedIds.forEach(markOperationSynced) });
+      if (acquireSyncLock()) {
+        const pending = readPendingOperations();
+        const operations = pending.flatMap((operation) => { try { return [{ id: operation.id, operationId: operation.operation_id, operationType: operation.operation_type as "product.create" | "sale.create", payload: JSON.parse(operation.payload) }]; } catch { return []; } });
+        if (operations.length) syncPending.mutate({ operations }, { onSuccess: (result) => { result.syncedIds.forEach(markOperationSynced); releaseSyncLock(); }, onError: () => { pending.forEach((operation) => markOperationFailed(operation.id)); releaseSyncLock(); } }); else releaseSyncLock();
       }
     }, 0);
     return () => clearTimeout(timer);

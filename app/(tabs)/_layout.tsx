@@ -23,7 +23,10 @@ export default function TabLayout() {
     <Tabs.Screen name="purchases" options={{ title: "المشتريات", tabBarIcon: tabIcon("bag-add-outline") }} />
     <Tabs.Screen name="expenses" options={{ title: "المصروفات", tabBarIcon: tabIcon("receipt-outline") }} />
     <Tabs.Screen name="returns" options={{ title: "المرتجعات", tabBarIcon: tabIcon("return-down-back-outline") }} />
+    <Tabs.Screen name="purchase-returns" options={{ title: "مرتجع شراء", tabBarIcon: tabIcon("arrow-undo-outline") }} />
+    <Tabs.Screen name="accounts" options={{ title: "الحسابات", tabBarIcon: tabIcon("wallet-outline") }} />
     <Tabs.Screen name="users" options={{ title: "المستخدمون", tabBarIcon: tabIcon("people-outline") }} />
+    <Tabs.Screen name="audit" options={{ title: "التدقيق", tabBarIcon: tabIcon("shield-checkmark-outline") }} />
     <Tabs.Screen name="reports" options={{ title: "التقارير", tabBarIcon: tabIcon("bar-chart-outline") }} />
     <Tabs.Screen name="assistant" options={{ title: "Gemini", tabBarIcon: tabIcon("sparkles-outline") }} />
   </Tabs>;

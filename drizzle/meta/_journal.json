@@ -36,6 +36,13 @@
       "when": 1794018272906,
       "tag": "0004_confused_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1794018780547,
+      "tag": "0005_pale_millenium_guard",
+      "breakpoints": true
     }
   ]
 }
